@@ -4,8 +4,13 @@
     {
       "name": "live_translate",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["start"],
-      "port": 8787
+      "runtimeArgs": [
+        "start"
+      ],
+      "port": 8787,
+      "env": {
+        "SERVE_SAMPLES": "1"
+      }
     }
   ]
 }

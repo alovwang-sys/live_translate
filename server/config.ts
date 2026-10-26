@@ -19,4 +19,8 @@ export const config = {
   port: Number(process.env.PORT ?? 8787),
   host: process.env.HOST ?? "127.0.0.1",
   accessToken: process.env.ACCESS_TOKEN ?? "",
+  /** 同时进行的同传会话上限 */
+  maxSessions: Number(process.env.MAX_SESSIONS ?? 2),
+  /** 单次使用时长上限（分钟），到点自动停止，防止忘关一直计费 */
+  maxSessionMinutes: Number(process.env.MAX_SESSION_MINUTES ?? 120),
 };

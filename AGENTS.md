@@ -5,7 +5,7 @@
 
 ## 0. 一句话
 
-用浏览器打开 **https://magictoolse.com**，网页采集现场声音 → 后端转发给阿里云百炼实时同传模型 → 耳机里听中文译音，字幕可选。手机、电脑都能用。默认场景：**英语演讲 → 中文收听**。
+用浏览器打开 **https://magictoolse.com/live/**，网页采集现场声音 → 后端转发给阿里云百炼实时同传模型 → 耳机里听中文译音，字幕可选。手机、电脑都能用。默认场景：**英语演讲 → 中文收听**。
 
 ```mermaid
 flowchart LR
@@ -108,11 +108,12 @@ live_translate/
 ├── samples/              # 测试音频（wav 不进 git）、*.anchors.json 逐句对齐关键词
 ├── web/
 │   ├── index.html
-│   ├── main.ts           # 状态机：自检 → 选模式 → 同传 → 停止
-│   ├── capture.worklet.ts
-│   ├── player.worklet.ts
-│   ├── selftest.ts       # 收音自检
-│   └── ui.ts             # 三个状态灯、字幕、错误提示
+│   ├── main.ts           # 页面状态机：开始 → 同传 → 停止收尾；状态灯、提示、调试信息
+│   ├── audio.ts          # 音频管线（麦克风/测试音频 → 采音；译音 → 播放）
+│   ├── capture.worklet.ts# 降采样到 16 kHz PCM16，每 100 ms 一包
+│   ├── player.worklet.ts # 24 kHz 播放 + 积压控制（>3 s 加速、>6 s 跳过）
+│   ├── subtitles.ts      # 按句末标点切句的字幕
+│   └── selftest.ts       # 收音自检（M3）
 ├── deploy/
 │   ├── nginx.conf        # magictoolse.com 站点配置片段
 │   ├── live_translate.service
@@ -183,6 +184,7 @@ npm run dev               # http://localhost:8787 ，localhost 下麦克风无�
 npm run typecheck
 ./scripts/make-sample.sh  # 生成 samples/talk_en.wav、talk_en_gaps.wav
 npm run probe -- samples/talk_en.wav            # 语音模式；加 --mode text 测仅字幕
+SERVE_SAMPLES=1 npm start # 打开 http://localhost:8787/?src=samples/talk_en.wav 用测试音频代替麦克风
 ```
 
 每次 probe 约消耗 0.1 元。
@@ -211,7 +213,7 @@ nginx 需要给 `/ws` 加 `proxy_http_version 1.1; proxy_set_header Upgrade $htt
 
 火山引擎切换、PPT 图像识别、锁屏后台运行、多人共享收听、用户账号体系。
 
-> 注意：网站公开后任何人都能用、费用记在这个账号上。M4 上线时至少加一个简单的访问口令（`ACCESS_TOKEN`，写在 `.env`），并在后端限制单连接时长和并发数。
+> 网站公开后任何人都能用，费用记在这个账号上。已做的防护：访问口令 `ACCESS_TOKEN`（网址带一次 `?token=…`，浏览器会记住）、同时使用人数上限 `MAX_SESSIONS=2`（第 3 个人会看到“已满，请稍后再试”）、单次时长上限 `MAX_SESSION_MINUTES=120`。
 
 ---
 
@@ -224,16 +226,17 @@ nginx 需要给 `/ws` 加 `proxy_http_version 1.1; proxy_set_header Upgrade $htt
 ## 10. 待确认
 
 1. ~~翻译方向~~：已确认固定「英 → 中」（2026-10-26）。
-2. 网站是否需要访问口令（建议要）？
+2. ~~访问口令~~：要（2026-10-26）。
 3. 有没有 5–10 分钟现场录音、术语/讲者名单可以提供？
-4. M4 访问入口：`magictoolse.com` 根路径和 `translate.` 子域名都已被占用。新开子域名（如 `live.magictoolse.com`，需要加 DNS 记录和证书），还是挂在 `magictoolse.com/live/` 路径下？
+4. ~~M4 访问入口~~：挂在 **`https://magictoolse.com/live/`**（2026-10-26，选了最简单的方式：不加 DNS、不换证书）。nginx 在现有 `magictoolse.conf` 的 443 server 块里加 `location /live/`，转发到 `127.0.0.1:8787/`（去掉前缀）；前端用相对路径，`/ws` 自动变成 `/live/ws`。
+5. ~~并发~~：最多 2 人同时使用（2026-10-26）。
 
 ## 进度
 
 - [x] 2026-10-26 方案定稿；核对模型名、接口参数；确认域名解析和 HTTPS
 - [x] 2026-10-26 M0 骨架：fastify 静态页 + `/ws` + `/healthz`，网页点「测试连通」能走通 浏览器 → 后端 → 百炼会话
 - [x] 2026-10-26 M1 打通链路：`npm run probe` 跑通语音和仅字幕两种模式；译音延迟平均约 4.1–4.4 s，字幕约 3.5 s（见 `docs/test-log.md`）
-- [ ] M2 网页同传
+- [x] 2026-10-26 M2 网页同传：采音/播放 worklet、三种模式、中文字幕按句切分、停止时等尾句、访问口令、2 路并发上限；用测试音频在浏览器里端到端验证通过（真实麦克风待用户实测）
 - [ ] M3 自检与稳定性
 - [ ] M4 上线
 - [ ] M5 验收

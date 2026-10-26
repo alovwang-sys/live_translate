@@ -16,5 +16,5 @@ export type ServerMessage =
   | { type: "source"; itemId: string; text: string; final: boolean }
   | { type: "target"; itemId: string; text: string; final: boolean }
   | { type: "speech"; event: "started" | "stopped" }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; code?: "busy" | "timeout" }
   | { type: "pong"; t: number };

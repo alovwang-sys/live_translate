@@ -3,21 +3,70 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#161615" media="(prefers-color-scheme: dark)" />
     <title>网页同传助手</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <main>
-      <h1>网页同传助手</h1>
-      <p class="sub">英语 → 中文 · M0 连通性测试</p>
+      <header>
+        <h1>网页同传助手</h1>
+        <p class="sub">英语 → 中文 · 戴上耳机使用</p>
+      </header>
 
-      <ul class="lights">
-        <li id="light-ws"><span class="dot"></span>后端连接</li>
-        <li id="light-upstream"><span class="dot"></span>百炼会话</li>
+      <section id="token-box" class="card" hidden>
+        <label for="token-input">访问口令</label>
+        <div class="row">
+          <input id="token-input" type="password" autocomplete="off" placeholder="请输入口令" />
+          <button id="token-save" type="button" class="secondary">确定</button>
+        </div>
+      </section>
+
+      <section id="setup" class="card">
+        <fieldset class="modes">
+          <legend>收听方式</legend>
+          <label><input type="radio" name="mode" value="audio" checked /> 语音</label>
+          <label><input type="radio" name="mode" value="audio+text" /> 语音＋字幕</label>
+          <label><input type="radio" name="mode" value="text" /> 仅字幕</label>
+        </fieldset>
+        <label class="field" for="mic">
+          <span>麦克风</span>
+          <select id="mic"><option value="">默认麦克风</option></select>
+        </label>
+        <label class="check">
+          <input id="processing" type="checkbox" />
+          <span>浏览器降噪（远处讲话时建议关闭）</span>
+        </label>
+      </section>
+
+      <button id="btn-main" type="button" class="primary">开始同传</button>
+      <p id="notice" class="notice" role="status" hidden></p>
+
+      <ul class="lights" aria-label="状态">
+        <li id="light-mic"><span class="dot"></span>采音</li>
+        <li id="light-net"><span class="dot"></span>连接</li>
+        <li id="light-play"><span class="dot"></span>播放</li>
       </ul>
+      <div class="meter" aria-hidden="true"><div id="meter-bar"></div></div>
+      <p id="input-label" class="muted small"></p>
 
-      <button id="btn-test" type="button">测试连通</button>
-      <pre id="log" aria-live="polite"></pre>
+      <section id="subs" class="subs" hidden>
+        <div id="sub-target" class="sub-target" aria-live="polite"></div>
+        <div id="sub-source" class="sub-source"></div>
+      </section>
+
+      <details class="debug">
+        <summary>调试信息</summary>
+        <dl>
+          <dt>已上传音频</dt><dd id="d-sent">0 s</dd>
+          <dt>译音积压</dt><dd id="d-backlog">0 s</dd>
+          <dt>播放倍速</dt><dd id="d-rate">1×</dd>
+          <dt>已跳过译音</dt><dd id="d-dropped">0 s</dd>
+          <dt>后端往返</dt><dd id="d-rtt">–</dd>
+        </dl>
+        <pre id="log"></pre>
+      </details>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>
