@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>网页同传助手</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>网页同传助手</h1>
+      <p class="sub">英语 → 中文 · M0 连通性测试</p>
+
+      <ul class="lights">
+        <li id="light-ws"><span class="dot"></span>后端连接</li>
+        <li id="light-upstream"><span class="dot"></span>百炼会话</li>
+      </ul>
+
+      <button id="btn-test" type="button">测试连通</button>
+      <pre id="log" aria-live="polite"></pre>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

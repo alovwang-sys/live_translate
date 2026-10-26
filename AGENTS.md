@@ -24,11 +24,17 @@ flowchart LR
 
 | 项 | 值 | 状态 |
 |---|---|---|
-| 服务器 | `112.124.61.7`（阿里云，杭州），用户 `root` | 在线，nginx 1.28 默认页 |
-| 域名 | `magictoolse.com` | A 记录已指向上面的 IP；HTTPS 已可访问（证书已配） |
+| 服务器 | `112.124.61.7`（阿里云，Alibaba Cloud Linux 3，2 核 / 1.8 GB，Node 24），用户 `root` | 本机 `ssh aliyun-server-2` 免密（密钥 `~/.ssh/id_ed25519_autodrive`） |
+| 域名 | `magictoolse.com` | A 记录已指向上面的 IP；HTTPS 已可访问（证书在 `/etc/nginx/ssl/`） |
 | 代码仓库 | `https://github.com/alovwang-sys/live_translate.git`，分支 `main` | 空仓库，待首次推送 |
 | 百炼业务空间 | `llm-xwv932pj8rnj30mx`（北京） | API Key 可用，已列出模型 |
 | 同传模型 | `qwen3.8-livetranslate-flash-realtime`（首选）；备选 `qwen3.5-livetranslate-flash-realtime` | 已在空间里确认存在 |
+
+**服务器上已有其他服务，部署时不要碰：**
+- `magictoolse.com` 的 `/` 是 `/var/www/magictoolse/frontend` 下的静态站，`/api/` 转发到 `:8000`（python3.8）。配置在 `/etc/nginx/conf.d/magictoolse.conf`。
+- `translate.magictoolse.com` 是另一个翻译服务（`:8765` WebSocket，`:8080` API，Let's Encrypt 证书）。配置在 `/etc/nginx/conf.d/translate.conf`。
+- 另有宝塔面板 `:18712`、MySQL `:3306`。
+- 本项目只用 `127.0.0.1:8787`，访问入口（新子域名或路径）在 M4 前和用户确认，不改动现有站点。
 
 **密钥规矩（硬性）：**
 - API Key、服务器密码只放在 `.env`（本机）和服务器上的 `/opt/live_translate/.env`，**永远不进 git、不进前端代码、不写进本文件**。
@@ -58,8 +64,15 @@ flowchart LR
   - 译文：`response.audio_transcript.delta` / `.done`（文本+音频模式）；`response.text.delta` / `.done`（仅文本模式）
   - 译音：`response.audio.delta`（Base64 PCM）/ `response.audio.done`
   - `response.done`、`error`
-- **计费**：音频输入 7 token/秒，输出 12.5 token/秒，单价看[计费页](https://help.aliyun.com/zh/model-studio/qwen3-8-livetranslate-flash-realtime)。原方案估算约 8.21 元/小时（语音模式），开发时按最新单价复核。
-- **单会话时长上限**：文档未写明。M1 阶段实测；后端按「到上限前主动续会话」设计。
+- **计费**（北京，已核对）：音频输入 7 token/秒 × 0.04 元/千 token ≈ 1.01 元/小时；音频输出 12.5 token/秒 × 0.16 元/千 token ≈ 7.2 元/小时；文本输出 0.1 元/千 token。语音模式约 **8.2 元/小时**，仅字幕模式约 **1.1 元/小时**（另加少量文本费用）。
+- **限流**：RPM 10（每分钟最多建 10 个会话），TPM 100,000。重连和续会话都要遵守，不能频繁重试。
+- **上下文**：上限 53,248 token。如果会话里的上下文一直累积，大约 45 分钟就会满。
+- **单会话时长上限**：文档未写明，M3 用长样本实测；后端按「到上限前主动续会话」设计。
+- **M1 实测确认的行为**（详见 `docs/test-log.md`）：
+  - `session.created` 返回的默认目标语种是 `en`，必须用 `session.update` 改成 `zh`。
+  - `speaker_detection` 下，同一个讲话人连续讲 = 一个条目，原文和译文是一个不断增长的长串，字幕要按句号自己切句。
+  - 增量字段都叫 `delta`；最终文本在 `transcript`（原文的 `.completed`、语音模式译文的 `.done`）或 `text`（仅字幕模式）。
+  - 译音每包约 0.3 s；服务端下发速度约为实时的 0.9 倍。
 
 ---
 
@@ -81,11 +94,18 @@ live_translate/
 ├── AGENTS.md
 ├── .env.example          # 字段说明，不含真实值
 ├── package.json
+├── shared/
+│   └── protocol.ts       # 浏览器 ⇄ 后端 消息类型、采样率常量
 ├── server/
-│   ├── index.ts          # fastify：静态文件 + /ws
-│   ├── relay.ts          # 浏览器 WS ⇄ 百炼 WS 中转、事件精简
-│   ├── session.ts        # 会话生命周期：续会话、重连、尾句收尾
-│   └── config.ts         # 读取 .env
+│   ├── index.ts          # fastify：静态文件 + /ws + /healthz
+│   ├── bailian.ts        # 百炼 Realtime 协议客户端（M1 已完成）
+│   ├── relay.ts          # 浏览器 WS ⇄ 百炼 WS 中转、事件精简（M2）
+│   ├── session.ts        # 会话生命周期：续会话、重连、尾句收尾（M3）
+│   └── config.ts         # 读取 .env（Node 自带 process.loadEnvFile）
+├── scripts/
+│   ├── make-sample.sh    # 用 macOS TTS 生成英文测试样本
+│   └── probe.ts          # 命令行链路验证与延迟测量（npm run probe）
+├── samples/              # 测试音频（wav 不进 git）、*.anchors.json 逐句对齐关键词
 ├── web/
 │   ├── index.html
 │   ├── main.ts           # 状态机：自检 → 选模式 → 同传 → 停止
@@ -135,7 +155,7 @@ live_translate/
 |---|---|
 | 蓝牙耳机抢麦克风 | 自检显示实际设备；提供设备下拉框切换；收音差时建议有线耳机或手机外放麦克风 |
 | 浏览器降噪压掉远处人声 | 自检 A/B 对比，记住选择；默认关 `noiseSuppression` 试一次 |
-| 译音积压、越来越慢 | 播放器积压 > 3 s 时 1.15× 播放；> 6 s 时丢弃最旧的整句，只播最新；字幕完整保留 |
+| 译音积压、越来越慢 | 播放器积压 > 3 s 时 1.15× 播放；> 6 s 时丢弃最旧的整句，只播最新；字幕完整保留。M1 实测：连续讲话时译音延迟会从约 2 s 涨到 5–6 s，偶尔服务端变慢时会到 14 s，所以这一条必须做 |
 | 单会话时长上限 | 后端在上限前（或收到相关 error 时）新开一个百炼会话，在讲话间隙（`speech_stopped` 之后）切换，旧会话 `session.finish` 收尾 |
 | 网络波动 / 断线 | 浏览器端指数退避重连（0.5 s→8 s），重连期间本地缓存最多 10 s 音频后补传；后端到百炼断线同样重连 |
 | 手机锁屏 | 首版不支持后台运行；用 Wake Lock 防息屏，页面切后台时提示 |
@@ -160,7 +180,12 @@ live_translate/
 cp .env.example .env      # 填 DASHSCOPE_API_KEY
 npm install
 npm run dev               # http://localhost:8787 ，localhost 下麦克风无需 HTTPS
+npm run typecheck
+./scripts/make-sample.sh  # 生成 samples/talk_en.wav、talk_en_gaps.wav
+npm run probe -- samples/talk_en.wav            # 语音模式；加 --mode text 测仅字幕
 ```
+
+每次 probe 约消耗 0.1 元。
 
 ### 部署（M4 起）
 
@@ -198,15 +223,16 @@ nginx 需要给 `/ws` 加 `proxy_http_version 1.1; proxy_set_header Upgrade $htt
 
 ## 10. 待确认
 
-1. 翻译方向固定「英 → 中」？是否需要页面上可切换源/目标语种？
+1. ~~翻译方向~~：已确认固定「英 → 中」（2026-10-26）。
 2. 网站是否需要访问口令（建议要）？
 3. 有没有 5–10 分钟现场录音、术语/讲者名单可以提供？
+4. M4 访问入口：`magictoolse.com` 根路径和 `translate.` 子域名都已被占用。新开子域名（如 `live.magictoolse.com`，需要加 DNS 记录和证书），还是挂在 `magictoolse.com/live/` 路径下？
 
 ## 进度
 
 - [x] 2026-10-26 方案定稿；核对模型名、接口参数；确认域名解析和 HTTPS
-- [ ] M0 骨架
-- [ ] M1 打通链路
+- [x] 2026-10-26 M0 骨架：fastify 静态页 + `/ws` + `/healthz`，网页点「测试连通」能走通 浏览器 → 后端 → 百炼会话
+- [x] 2026-10-26 M1 打通链路：`npm run probe` 跑通语音和仅字幕两种模式；译音延迟平均约 4.1–4.4 s，字幕约 3.5 s（见 `docs/test-log.md`）
 - [ ] M2 网页同传
 - [ ] M3 自检与稳定性
 - [ ] M4 上线

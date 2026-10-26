@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "live_translate",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "port": 8787
+    }
+  ]
+}

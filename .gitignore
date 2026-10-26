@@ -6,3 +6,4 @@ dist/
 *.wav
 *.pcm
 .DS_Store
+samples/*.jsonl
