@@ -1,6 +1,17 @@
 import type { ClientMessage, Mode, ServerMessage } from "../shared/protocol";
 import { AudioPipeline, listMicrophones, looksLikeBluetooth } from "./audio";
 import { EN_ENDERS, SubtitleTrack, ZH_ENDERS } from "./subtitles";
+import {
+  clearRecord,
+  copyText,
+  describe,
+  downloadText,
+  fileName,
+  formatRecord,
+  loadRecord,
+  saveRecord,
+  type TranscriptRecord,
+} from "./record";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -24,8 +35,68 @@ const ui = {
   dRtt: $("d-rtt"),
 };
 
-const target = new SubtitleTrack($("sub-target"), ZH_ENDERS);
-const source = new SubtitleTrack($("sub-source"), EN_ENDERS, 3);
+const target = new SubtitleTrack($("sub-target"), ZH_ENDERS, "");
+const source = new SubtitleTrack($("sub-source"), EN_ENDERS, " ", 3);
+
+// ---------- 同传记录（复制 / 下载 / 本机保存） ----------
+let record: TranscriptRecord | null = loadRecord();
+let saveTimer: number | undefined;
+
+function syncRecord() {
+  if (!record || phase === "idle") return;
+  record.source = source.text();
+  record.target = target.text();
+  renderRecord();
+  // 进行中每 3 秒存一次，页面意外关闭也能找回大部分内容
+  if (saveTimer === undefined) {
+    saveTimer = window.setTimeout(() => {
+      saveTimer = undefined;
+      if (record) saveRecord(record);
+    }, 3000);
+  }
+}
+target.onChange = syncRecord;
+source.onChange = syncRecord;
+
+function renderRecord() {
+  const box = $("record");
+  box.hidden = !record || (!record.source && !record.target);
+  if (!record || box.hidden) return;
+  $("record-meta").textContent = describe(record);
+  $("record-stats").textContent = `译文 ${record.target.length} 字 · 原文 ${record.source.split(/\s+/).filter(Boolean).length} 词`;
+}
+renderRecord();
+
+function finalizeRecord() {
+  if (!record) return;
+  target.flush();
+  source.flush();
+  record.source = source.text();
+  record.target = target.text();
+  record.endedAt = Date.now();
+  clearTimeout(saveTimer);
+  saveTimer = undefined;
+  if (record.source || record.target) saveRecord(record);
+  else record = loadRecord(); // 这次没内容（如没连上），继续显示上一次的记录
+  renderRecord();
+}
+
+async function copyRecord(part: "all" | "target", btn: HTMLButtonElement) {
+  if (!record) return;
+  const ok = await copyText(formatRecord(record, part));
+  const label = btn.textContent;
+  btn.textContent = ok ? "已复制 ✓" : "复制失败";
+  setTimeout(() => (btn.textContent = label), 1500);
+}
+$<HTMLButtonElement>("rec-copy-all").addEventListener("click", (e) => copyRecord("all", e.currentTarget as HTMLButtonElement));
+$<HTMLButtonElement>("rec-copy-zh").addEventListener("click", (e) => copyRecord("target", e.currentTarget as HTMLButtonElement));
+$("rec-download").addEventListener("click", () => record && downloadText(fileName(record), formatRecord(record)));
+$("rec-clear").addEventListener("click", () => {
+  if (phase !== "idle") return;
+  clearRecord();
+  record = null;
+  renderRecord();
+});
 
 // ---------- 本机记忆（失败不影响使用） ----------
 const store = {
@@ -144,6 +215,8 @@ async function start() {
   notify("");
   target.clear();
   source.clear();
+  record = { startedAt: Date.now(), source: "", target: "" };
+  renderRecord();
   ui.subs.hidden = mode === "audio";
   sentSec = 0;
   pendingAudio = [];
@@ -296,6 +369,7 @@ async function finish() {
 }
 
 async function cleanup() {
+  finalizeRecord();
   clearInterval(pingTimer);
   const s = ws;
   ws = null;

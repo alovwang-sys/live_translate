@@ -131,6 +131,13 @@ button:disabled { opacity: 0.55; cursor: default; }
 .sub-source p { margin: 0; display: inline; }
 .sub-source p + p::before { content: " "; }
 
+.record { margin-top: 16px; }
+.record-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.record p { margin: 6px 0 0; }
+.record-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.record-actions button { flex: 1 1 0; min-width: 96px; }
+button.link { background: none; padding: 0 0 0 6px; color: var(--accent); font-size: inherit; }
+
 .debug { margin-top: 24px; font-size: 14px; color: var(--muted); }
 .debug summary { cursor: pointer; }
 .debug dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 16px; margin: 10px 0; }
