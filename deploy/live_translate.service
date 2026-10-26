@@ -1,0 +1,23 @@
+[Unit]
+Description=live_translate 网页同传后端
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=live_translate
+Group=live_translate
+WorkingDirectory=/opt/live_translate
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=8787
+ExecStart=/usr/bin/node dist/server/server/index.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

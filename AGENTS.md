@@ -174,7 +174,7 @@ live_translate/
 - **M1 打通链路（命令行）**：`scripts/probe.ts` 读一个英文 wav，推给百炼，打印原文/译文、保存译音 wav；测出首包延迟、确认会话时长上限和 error 码。
 - **M2 网页同传（本机 localhost）**：采音 worklet、后端中转、播放 worklet、字幕、三个模式、停止收尾。
 - **M3 收音自检 + 稳定性**：自检页、设备切换、积压控制、续会话、断线重连、调试面板。
-- **M4 上线 magictoolse.com**：systemd + nginx 反代 + `deploy.sh`；手机实测。
+- **M4 上线 magictoolse.com/live/**：systemd + nginx 反代 + `deploy.sh`；手机实测。
 - **M5 验收**：按第 7 节跑三项测试，结果写入 `docs/test-log.md`。
 
 ### 本机开发
@@ -191,13 +191,33 @@ SERVE_SAMPLES=1 npm start # 打开 http://localhost:8787/?src=samples/talk_en.wa
 
 每次 probe 约消耗 0.1 元。
 
-### 部署（M4 起）
+### 部署（已上线 https://magictoolse.com/live/）
+
+日常更新只需要在本机运行：
 
 ```bash
-./deploy/deploy.sh        # build → rsync 到 /opt/live_translate → systemctl restart live_translate
+./deploy/deploy.sh        # 类型检查 → 构建 → tar 经 ssh 上传到 /opt/live_translate → npm ci → 重启服务 → 检查 healthz
 ```
 
-nginx 需要给 `/ws` 加 `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 3600s;`。
+服务器上的布局（2026-10-26 首次部署）：
+
+| 项 | 位置 |
+|---|---|
+| 代码 | `/opt/live_translate`（属主是系统用户 `live_translate`，nologin） |
+| 配置和密钥 | `/opt/live_translate/.env`（600 权限；API Key、`ACCESS_TOKEN`）。`deploy.sh` 不会覆盖它 |
+| 服务 | `/etc/systemd/system/live_translate.service`（来自 `deploy/live_translate.service`），只监听 `127.0.0.1:8787` |
+| nginx | `/etc/nginx/conf.d/magictoolse.conf` 的 443 server 块里，`# API反向代理` 之前插入了 `deploy/nginx-live.conf`（`location /live/` → `127.0.0.1:8787/`，带 WebSocket 升级、3 小时超时） |
+| nginx 备份 | `/root/nginx-backup/magictoolse.conf.20261026-210902`（插入前的原文件） |
+
+常用命令：
+
+```bash
+ssh aliyun-server-2 'systemctl status live_translate'
+ssh aliyun-server-2 'journalctl -u live_translate -f'
+ssh aliyun-server-2 'grep ^ACCESS_TOKEN= /opt/live_translate/.env'   # 查看访问口令
+```
+
+回滚 nginx：`cp /root/nginx-backup/magictoolse.conf.20261026-210902 /etc/nginx/conf.d/magictoolse.conf && nginx -t && systemctl reload nginx`。
 
 ---
 
@@ -241,5 +261,5 @@ nginx 需要给 `/ws` 加 `proxy_http_version 1.1; proxy_set_header Upgrade $htt
 - [x] 2026-10-26 M2 网页同传：采音/播放 worklet、三种模式、中文字幕按句切分、停止时等尾句、访问口令、2 路并发上限；用测试音频在浏览器里端到端验证通过（真实麦克风待用户实测）
 - [x] 2026-10-26 同传记录导出：复制全部 / 复制译文 / 下载 TXT（UTF-8 带 BOM），本机保存最近一次记录
 - [ ] M3 自检与稳定性
-- [ ] M4 上线
+- [x] 2026-10-26 M4 上线 https://magictoolse.com/live/ ：systemd 服务、nginx `/live/` 反代、访问口令；线上 wss 端到端验证通过（手机真机待用户实测）
 - [ ] M5 验收

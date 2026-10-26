@@ -70,3 +70,15 @@
 - 下载 TXT：文件名 `同传记录_2026-10-26_2104.txt`，内容和复制的一致（测试时拦截了实际保存）
 - 刷新页面：记录卡片和内容都恢复
 - 这次 ASR 把 “My name is Daniel, and I lead the platform team” 识别成了 “My name is Dap Platform Team”，译文跟着错了。这是识别的波动，不是导出的问题。前几次同样的样本都识别对了；专有名词可以用 M3 的术语表（`corpus.phrases`）来改善
+
+## M4 · 上线 magictoolse.com/live/（2026-10-26）
+
+- `https://magictoolse.com/live/healthz` → 200 `{"ok":true,…,"active":0,"max":2}`；`/live/` 页面 200；`/live` 301 → `/live/`
+- 原站点：`https://magictoolse.com/` 200（和改动前一样 1906 B）；`/api/` 仍由原 python 服务响应。`translate.magictoolse.com` 的配置没动，在服务器本机测试响应正常（本机开着代理，从这台 Mac 解析出来的是假地址，测不到）
+- 线上 wss 端到端（脚本从本机连 `wss://magictoolse.com/live/ws`）：
+  - 没有口令 → 4401
+  - 带口令推 20 s 英文：connecting → ready → finishing → closed；首个译音包 4.3 s（包含建会话的 2–3 s，这期间的音频有缓存，不会丢）；收到译音 16.1 s，中文译文完整
+- 服务日志正常记录了会话的开始和关闭（时长 22 s）
+- 浏览器打开 `https://magictoolse.com/live/` 页面加载正常
+
+**未覆盖**：手机真机（iOS Safari / 安卓 Chrome）+ 真实麦克风。
