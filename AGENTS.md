@@ -76,7 +76,7 @@ flowchart LR
 
 ---
 
-### 2.1 纯转写（「仅转写」模式，2026-10-27 新增）
+### 2.1 语音转文字（不翻译，2026-10-27 新增）
 
 - **模型**：`qwen3-asr-flash-realtime`，和同传用同一个地址 `…/api-ws/v1/realtime?model=qwen3-asr-flash-realtime`、同一套协议。Key 用 `.env` 里的 `ASR_API_KEY`，不填则沿用 `DASHSCOPE_API_KEY`。
 - **会话配置**：`session.update` 设 `input_audio_format: "pcm"`、`sample_rate: 16000`、`input_audio_transcription.language`（不填自动识别），`turn_detection: { type: "server_vad", threshold: 0.2, silence_duration_ms: 600 }`。
@@ -108,14 +108,14 @@ live_translate/
 ├── server/
 │   ├── index.ts          # fastify：静态文件 + /ws + /healthz
 │   ├── bailian.ts        # 百炼 Realtime 协议客户端（M1 已完成）
-│   ├── asr.ts            # 纯转写：qwen3-asr-flash-realtime 客户端（只出原文）
+│   ├── asr.ts            # 语音转文字：qwen3-asr-flash-realtime 客户端（只出原文）
 │   ├── relay.ts          # 浏览器 WS ⇄ 百炼 WS 中转、事件精简（M2）
 │   ├── session.ts        # 会话生命周期：续会话、重连、尾句收尾（M3）
 │   └── config.ts         # 读取 .env（Node 自带 process.loadEnvFile）
 ├── scripts/
 │   ├── make-sample.sh    # 用 macOS TTS 生成英文测试样本
 │   ├── probe.ts          # 命令行链路验证与延迟测量（npm run probe）
-│   └── probe-asr.ts      # 纯转写链路验证（npm run probe:asr）
+│   └── probe-asr.ts      # 语音转文字链路验证（npm run probe:asr）
 ├── samples/              # 测试音频（wav 不进 git）、*.anchors.json 逐句对齐关键词
 ├── web/
 │   ├── index.html
@@ -154,7 +154,10 @@ live_translate/
    - 实时电平表，判断远处讲话音量够不够。
    - 「浏览器降噪开」和「关」（`echoCancellation/noiseSuppression/autoGainControl`）各录 8 秒回放对比，用户选好的那个；记到 `localStorage`。
    - 自检录音只在本地回放，不上传。
-3. 选模式：语音 / 语音＋字幕 / 仅字幕 → 开始同传。
+3. **先选功能，再选设置**（页面最上方两张卡片）：
+   - **同声传译**（英 → 中）→ 收听方式：只听译音 / 译音＋字幕 / 只看字幕 → 「开始同传」
+   - **语音转文字**（不翻译）→ 讲话的语言：自动识别 / 英 / 中 / 粤 / 日 / 韩 → 「开始转文字」
+   功能和收听方式分开存在 localStorage（`lt_task` / `lt_mode`），下次打开自动恢复。
 4. 听讲时：申请 `navigator.wakeLock` 保持常亮；页面显示 **采音 / 连接 / 播放** 三个状态灯；断线有明确提示并自动恢复。
 5. 点「停止」：发 `session.finish`，等 `session.finished` 和译音播完再关闭，不丢尾句。
 6. **同传记录**：页面下方的「同传记录」区可「复制全部」（中文译文 + 英文原文，带时间头）、「复制译文」、「下载 TXT」。进行中也能导出；三种模式（包括纯语音）都会记。记录每 3 秒存一次到本机浏览器（localStorage），刷新页面或意外关闭后能找回，下一次开始时被覆盖。后端不存任何内容。
@@ -270,7 +273,8 @@ ssh aliyun-server-2 'grep ^ACCESS_TOKEN= /opt/live_translate/.env'   # 查看访
 - [x] 2026-10-26 M0 骨架：fastify 静态页 + `/ws` + `/healthz`，网页点「测试连通」能走通 浏览器 → 后端 → 百炼会话
 - [x] 2026-10-26 M1 打通链路：`npm run probe` 跑通语音和仅字幕两种模式；译音延迟平均约 4.1–4.4 s，字幕约 3.5 s（见 `docs/test-log.md`）
 - [x] 2026-10-26 M2 网页同传：采音/播放 worklet、三种模式、中文字幕按句切分、停止时等尾句、访问口令、2 路并发上限；用测试音频在浏览器里端到端验证通过（真实麦克风待用户实测）
-- [x] 2026-10-27 纯转写模式「仅转写」：qwen3-asr-flash-realtime，可选语种（自动/英/中/粤/日/韩），记录导出为「转写记录」；原有三种同传模式回归通过
+- [x] 2026-10-27 语音转文字：qwen3-asr-flash-realtime，可选语种（自动/英/中/粤/日/韩），记录导出为「语音转文字记录」；原有三种同传模式回归通过
+- [x] 2026-10-27 页面改为「先选功能（同声传译 / 语音转文字），再选设置」，收听方式改叫 只听译音 / 译音＋字幕 / 只看字幕，并配一句说明
 - [x] 2026-10-26 同传记录导出：复制全部 / 复制译文 / 下载 TXT（UTF-8 带 BOM），本机保存最近一次记录
 - [ ] M3 自检与稳定性
 - [x] 2026-10-26 M4 上线 https://magictoolse.com/live/ ：systemd 服务、nginx `/live/` 反代、访问口令；线上 wss 端到端验证通过（手机真机待用户实测）

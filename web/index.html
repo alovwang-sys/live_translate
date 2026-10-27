@@ -12,7 +12,7 @@
     <main>
       <header>
         <h1>网页同传助手</h1>
-        <p class="sub" id="subtitle-line">英语 → 中文 · 戴上耳机使用</p>
+        <p class="sub">同声传译（英 → 中） · 语音转文字</p>
       </header>
 
       <section id="token-box" class="card" hidden>
@@ -24,24 +24,46 @@
       </section>
 
       <section id="setup" class="card">
-        <fieldset class="modes">
-          <legend>收听方式</legend>
-          <label><input type="radio" name="mode" value="audio" checked /> 语音</label>
-          <label><input type="radio" name="mode" value="audio+text" /> 语音＋字幕</label>
-          <label><input type="radio" name="mode" value="text" /> 仅字幕</label>
-          <label><input type="radio" name="mode" value="asr" /> 仅转写</label>
+        <fieldset class="tasks">
+          <legend>选择功能</legend>
+          <label class="task">
+            <input type="radio" name="task" value="translate" checked />
+            <strong>同声传译</strong>
+            <span>英语 → 中文，听译音或看字幕</span>
+          </label>
+          <label class="task">
+            <input type="radio" name="task" value="asr" />
+            <strong>语音转文字</strong>
+            <span>讲话实时变文字，不翻译</span>
+          </label>
         </fieldset>
-        <label id="asr-lang-field" class="field" for="asr-lang" hidden>
-          <span>识别语种（只出原文，不翻译）</span>
-          <select id="asr-lang">
-            <option value="">自动识别</option>
-            <option value="en">英语</option>
-            <option value="zh">中文</option>
-            <option value="yue">粤语</option>
-            <option value="ja">日语</option>
-            <option value="ko">韩语</option>
-          </select>
-        </label>
+
+        <div id="translate-opts">
+          <fieldset class="modes">
+            <legend>收听方式</legend>
+            <label><input type="radio" name="mode" value="audio" checked /> 只听译音</label>
+            <label><input type="radio" name="mode" value="audio+text" /> 译音＋字幕</label>
+            <label><input type="radio" name="mode" value="text" /> 只看字幕</label>
+          </fieldset>
+          <p id="mode-hint" class="hint"></p>
+        </div>
+
+        <div id="asr-opts" hidden>
+          <label class="field" for="asr-lang">
+            <span>讲话的语言</span>
+            <select id="asr-lang">
+              <option value="">自动识别</option>
+              <option value="en">英语</option>
+              <option value="zh">中文</option>
+              <option value="yue">粤语</option>
+              <option value="ja">日语</option>
+              <option value="ko">韩语</option>
+            </select>
+          </label>
+          <p class="hint">讲什么语言就记成什么语言的文字，不翻译、不出声音。</p>
+        </div>
+
+        <hr />
         <label class="field" for="mic">
           <span>麦克风</span>
           <select id="mic"><option value="">默认麦克风</option></select>

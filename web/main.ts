@@ -37,7 +37,7 @@ const ui = {
 
 const target = new SubtitleTrack($("sub-target"), ZH_ENDERS, "");
 const source = new SubtitleTrack($("sub-source"), EN_ENDERS, " ", 3);
-/** 纯转写的原文（任意语种） */
+/** 语音转文字的原文（任意语种） */
 const asr = new SubtitleTrack($("sub-asr"), ANY_ENDERS, "auto");
 
 // ---------- 同传记录（复制 / 下载 / 本机保存） ----------
@@ -74,7 +74,7 @@ function renderRecord() {
   box.hidden = !record || (!record.source && !record.target);
   if (!record || box.hidden) return;
   const isAsr = record.kind === "asr";
-  $("record-title").textContent = isAsr ? "转写记录" : "同传记录";
+  $("record-title").textContent = isAsr ? "转文字记录" : "同传记录";
   $("record-meta").textContent = describe(record);
   $("rec-copy-zh").textContent = isAsr ? "复制原文" : "复制译文";
   $("record-stats").textContent = isAsr
@@ -138,17 +138,30 @@ const srcUrl = params.get("src") ?? undefined;
 
 ui.processing.checked = store.get("processing") === "1";
 $<HTMLSelectElement>("asr-lang").value = store.get("asr_lang");
+// 恢复上次的选择：先选功能（同传 / 语音转文字），同传再选收听方式
 const savedMode = store.get("mode");
-if (savedMode) document.querySelector<HTMLInputElement>(`input[name=mode][value="${savedMode}"]`)?.click();
+const savedTask = store.get("task") || (savedMode === "asr" ? "asr" : "translate");
+const radio = (name: string, value: string) => document.querySelector<HTMLInputElement>(`input[name=${name}][value="${value}"]`);
+radio("task", savedTask)?.click();
+if (savedMode && savedMode !== "asr") radio("mode", savedMode)?.click();
 
-// 选“仅转写”时显示识别语种，标题和按钮文字跟着变
+const MODE_HINTS: Record<string, string> = {
+  audio: "戴耳机听中文译音，屏幕上不显示文字。",
+  "audio+text": "耳机里听中文译音，屏幕同时显示中英文字幕。",
+  text: "不出声音，只在屏幕上显示中英文字幕。",
+};
+
+// 功能和收听方式变化时，切换对应的设置项、说明和按钮文字
 function onModeChange() {
-  const isAsr = selectedMode() === "asr";
-  $("asr-lang-field").hidden = !isAsr;
-  $("subtitle-line").textContent = isAsr ? "语音转文字 · 只出原文，不翻译" : "英语 → 中文 · 戴上耳机使用";
-  if (phase === "idle") ui.main.textContent = isAsr ? "开始转写" : "开始同传";
+  const isAsr = selectedTask() === "asr";
+  $("translate-opts").hidden = isAsr;
+  $("asr-opts").hidden = !isAsr;
+  $("mode-hint").textContent = MODE_HINTS[selectedMode()] ?? "";
+  if (phase === "idle") ui.main.textContent = isAsr ? "开始转文字" : "开始同传";
 }
-document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((el) => el.addEventListener("change", onModeChange));
+document
+  .querySelectorAll<HTMLInputElement>("input[name=task], input[name=mode]")
+  .forEach((el) => el.addEventListener("change", onModeChange));
 
 // ---------- 小工具 ----------
 type Light = "off" | "busy" | "ok" | "bad";
@@ -164,7 +177,11 @@ function notify(text: string, kind: "info" | "warn" | "error" = "info") {
   ui.notice.textContent = text;
   ui.notice.dataset.kind = kind;
 }
+function selectedTask(): "translate" | "asr" {
+  return document.querySelector<HTMLInputElement>("input[name=task]:checked")?.value === "asr" ? "asr" : "translate";
+}
 function selectedMode(): Mode {
+  if (selectedTask() === "asr") return "asr";
   return (document.querySelector<HTMLInputElement>("input[name=mode]:checked")?.value ?? "audio") as Mode;
 }
 function wsUrl() {
@@ -228,7 +245,7 @@ function sendAudio(pcm: ArrayBuffer) {
 function setPhase(p: Phase) {
   phase = p;
   ui.main.disabled = p === "starting" || p === "finishing";
-  const idleLabel = selectedMode() === "asr" ? "开始转写" : "开始同传";
+  const idleLabel = selectedTask() === "asr" ? "开始转文字" : "开始同传";
   ui.main.textContent = { idle: idleLabel, starting: "正在连接…", running: "停止", finishing: "正在收尾…" }[p];
   ui.main.classList.toggle("stop", p === "running");
   ui.setup.toggleAttribute("inert", p !== "idle");
@@ -237,7 +254,8 @@ function setPhase(p: Phase) {
 
 async function start() {
   const mode = selectedMode();
-  store.set("mode", mode);
+  store.set("task", selectedTask());
+  if (mode !== "asr") store.set("mode", mode);
   store.set("processing", ui.processing.checked ? "1" : "0");
   notify("");
   const asrLang = $<HTMLSelectElement>("asr-lang").value;
@@ -440,5 +458,5 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-// 按上次选的模式初始化界面（放在最后：onModeChange 用到上面声明的 phase）
+// 按上次的选择初始化界面（放在最后：onModeChange 用到上面声明的 phase）
 onModeChange();

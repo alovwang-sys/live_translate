@@ -50,7 +50,7 @@ h1 { margin: 0; font-size: 24px; }
 }
 .card[inert] { opacity: 0.55; }
 
-.modes { border: 0; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.modes { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .modes legend { font-size: 13px; color: var(--muted); margin-bottom: 6px; padding: 0; }
 .modes label {
   flex: 1 1 0;
@@ -62,12 +62,28 @@ h1 { margin: 0; font-size: 24px; }
   cursor: pointer;
   white-space: nowrap;
 }
-@media (max-width: 480px) {
-  .modes label { flex: 1 1 calc(50% - 8px); }
-}
 .modes input { position: absolute; opacity: 0; pointer-events: none; }
 .modes label:has(input:checked) { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .modes label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tasks { border: 0; padding: 0; margin: 0 0 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tasks legend { font-size: 13px; color: var(--muted); margin-bottom: 6px; padding: 0; }
+.task {
+  display: grid;
+  gap: 2px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.task strong { font-size: 16px; }
+.task span { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.task input { position: absolute; opacity: 0; pointer-events: none; }
+.task:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.task:has(input:checked) strong { color: var(--accent); }
+.task:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hint { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 
 .field { display: grid; gap: 4px; margin-bottom: 10px; }
 .field span { font-size: 13px; color: var(--muted); }
@@ -138,7 +154,7 @@ button:disabled { opacity: 0.55; cursor: default; }
 .record-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .record p { margin: 6px 0 0; }
 .record-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.record-actions button { flex: 1 1 0; min-width: 96px; }
+.record-actions button { flex: 1 1 0; min-width: 88px; white-space: nowrap; padding-left: 8px; padding-right: 8px; }
 button.link { background: none; padding: 0 0 0 6px; color: var(--accent); font-size: inherit; }
 
 .debug { margin-top: 24px; font-size: 14px; color: var(--muted); }
