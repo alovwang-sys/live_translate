@@ -99,3 +99,16 @@
   - 按钮文字随功能变化：「开始同传」/「开始转文字」；记录区标题「同传记录」/「转文字记录」
 - 手机宽度（375 px）：两张功能卡片并排，说明两行内放得下；记录区三个按钮不再折行
 - 实测：语音转文字 + 中文样本（自动识别）3 句全对，导出“语音转文字记录”；切回同声传译「译音＋字幕」，有译音、有中英字幕，停止后等译音播完才结束；刷新页面能恢复上次选的功能
+
+## 上线语音转文字 + 新排版（2026-10-27）
+
+- 服务器 `.env` 先备份到 `/root/live_translate.env.bak-20261027-215627`，再追加 `ASR_API_KEY`、`ASR_MODEL`（600 权限不变）；`./deploy/deploy.sh` 部署，healthz 正常
+- 线上页面已是新排版（选择功能 / 同声传译 / 语音转文字 / 只听译音 / 译音＋字幕 / 只看字幕 / 讲话的语言）；原站首页 200，大小和之前一样（1906 B）
+- **线上并发重测**。本机代理反复打断 TLS 和 SSH，所以测试脚本放在服务器上运行，照样走 `wss://magictoolse.com/live/ws`，经过 nginx 和证书：
+  - 没有口令 → 4401
+  - A 转文字（英语）+ B 同传（译音＋字幕）同时开始 → 都 ready，healthz `active: 2`
+  - C 来开转文字 → `busy`：“当前已有 2 人在使用，请稍后再试”
+  - 推 15 s 英文：A 定稿 “Good morning, everyone, and thank you for joining us today. My name is Daniel, and I lead the platform team at our company.”；B 中文译文完整，收到译音 12.2 s
+  - A 停止 → finishing → closed，`active: 1`；C 重试 → ready，没有报错（6 s 内还没等到第一句定稿，属于正常）
+  - 全部断开 → `active: 0`
+  - 服务日志里每个会话的开始和关闭都成对出现，没有 upstream error
