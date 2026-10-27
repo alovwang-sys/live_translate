@@ -1,6 +1,6 @@
 import type { ClientMessage, Mode, ServerMessage } from "../shared/protocol";
 import { AudioPipeline, listMicrophones, looksLikeBluetooth } from "./audio";
-import { EN_ENDERS, SubtitleTrack, ZH_ENDERS } from "./subtitles";
+import { ANY_ENDERS, EN_ENDERS, SubtitleTrack, ZH_ENDERS } from "./subtitles";
 import {
   clearRecord,
   copyText,
@@ -37,6 +37,8 @@ const ui = {
 
 const target = new SubtitleTrack($("sub-target"), ZH_ENDERS, "");
 const source = new SubtitleTrack($("sub-source"), EN_ENDERS, " ", 3);
+/** 纯转写的原文（任意语种） */
+const asr = new SubtitleTrack($("sub-asr"), ANY_ENDERS, "auto");
 
 // ---------- 同传记录（复制 / 下载 / 本机保存） ----------
 let record: TranscriptRecord | null = loadRecord();
@@ -44,8 +46,7 @@ let saveTimer: number | undefined;
 
 function syncRecord() {
   if (!record || phase === "idle") return;
-  record.source = source.text();
-  record.target = target.text();
+  readTracks(record);
   renderRecord();
   // 进行中每 3 秒存一次，页面意外关闭也能找回大部分内容
   if (saveTimer === undefined) {
@@ -57,13 +58,28 @@ function syncRecord() {
 }
 target.onChange = syncRecord;
 source.onChange = syncRecord;
+asr.onChange = syncRecord;
+
+function readTracks(r: TranscriptRecord) {
+  if (r.kind === "asr") {
+    r.source = asr.text();
+  } else {
+    r.source = source.text();
+    r.target = target.text();
+  }
+}
 
 function renderRecord() {
   const box = $("record");
   box.hidden = !record || (!record.source && !record.target);
   if (!record || box.hidden) return;
+  const isAsr = record.kind === "asr";
+  $("record-title").textContent = isAsr ? "转写记录" : "同传记录";
   $("record-meta").textContent = describe(record);
-  $("record-stats").textContent = `译文 ${record.target.length} 字 · 原文 ${record.source.split(/\s+/).filter(Boolean).length} 词`;
+  $("rec-copy-zh").textContent = isAsr ? "复制原文" : "复制译文";
+  $("record-stats").textContent = isAsr
+    ? `原文 ${record.source.replace(/\s+/g, "").length} 字符`
+    : `译文 ${record.target.length} 字 · 原文 ${record.source.split(/\s+/).filter(Boolean).length} 词`;
 }
 renderRecord();
 
@@ -71,8 +87,8 @@ function finalizeRecord() {
   if (!record) return;
   target.flush();
   source.flush();
-  record.source = source.text();
-  record.target = target.text();
+  asr.flush();
+  readTracks(record);
   record.endedAt = Date.now();
   clearTimeout(saveTimer);
   saveTimer = undefined;
@@ -121,8 +137,18 @@ if (params.get("token")) store.set("token", params.get("token")!);
 const srcUrl = params.get("src") ?? undefined;
 
 ui.processing.checked = store.get("processing") === "1";
+$<HTMLSelectElement>("asr-lang").value = store.get("asr_lang");
 const savedMode = store.get("mode");
 if (savedMode) document.querySelector<HTMLInputElement>(`input[name=mode][value="${savedMode}"]`)?.click();
+
+// 选“仅转写”时显示识别语种，标题和按钮文字跟着变
+function onModeChange() {
+  const isAsr = selectedMode() === "asr";
+  $("asr-lang-field").hidden = !isAsr;
+  $("subtitle-line").textContent = isAsr ? "语音转文字 · 只出原文，不翻译" : "英语 → 中文 · 戴上耳机使用";
+  if (phase === "idle") ui.main.textContent = isAsr ? "开始转写" : "开始同传";
+}
+document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((el) => el.addEventListener("change", onModeChange));
 
 // ---------- 小工具 ----------
 type Light = "off" | "busy" | "ok" | "bad";
@@ -202,7 +228,8 @@ function sendAudio(pcm: ArrayBuffer) {
 function setPhase(p: Phase) {
   phase = p;
   ui.main.disabled = p === "starting" || p === "finishing";
-  ui.main.textContent = { idle: "开始同传", starting: "正在连接…", running: "停止", finishing: "正在收尾…" }[p];
+  const idleLabel = selectedMode() === "asr" ? "开始转写" : "开始同传";
+  ui.main.textContent = { idle: idleLabel, starting: "正在连接…", running: "停止", finishing: "正在收尾…" }[p];
   ui.main.classList.toggle("stop", p === "running");
   ui.setup.toggleAttribute("inert", p !== "idle");
   void keepAwake(p === "running" || p === "finishing");
@@ -213,11 +240,17 @@ async function start() {
   store.set("mode", mode);
   store.set("processing", ui.processing.checked ? "1" : "0");
   notify("");
+  const asrLang = $<HTMLSelectElement>("asr-lang").value;
+  if (mode === "asr") store.set("asr_lang", asrLang);
   target.clear();
   source.clear();
-  record = { startedAt: Date.now(), source: "", target: "" };
+  asr.clear();
+  record = { kind: mode === "asr" ? "asr" : "translate", startedAt: Date.now(), source: "", target: "" };
   renderRecord();
   ui.subs.hidden = mode === "audio";
+  $("sub-target").hidden = mode === "asr";
+  $("sub-source").hidden = mode === "asr";
+  $("sub-asr").hidden = mode !== "asr";
   sentSec = 0;
   pendingAudio = [];
   playerBacklog = 0;
@@ -230,7 +263,7 @@ async function start() {
       deviceId: ui.mic.value || undefined,
       processing: ui.processing.checked,
       srcUrl,
-      playback: mode !== "text",
+      playback: mode !== "text" && mode !== "asr",
       onChunk: (c) => {
         const level = Math.min(1, c.rms * 6);
         ui.meter.style.width = `${Math.round(level * 100)}%`;
@@ -277,7 +310,7 @@ async function start() {
   const send = (m: ClientMessage) => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m));
 
   ws.onopen = () => {
-    send({ type: "start", mode });
+    send(mode === "asr" ? { type: "start", mode, language: asrLang || undefined } : { type: "start", mode });
     for (const pcm of pendingAudio) sendAudio(pcm);
     pendingAudio = [];
     pingTimer = window.setInterval(() => send({ type: "ping", t: performance.now() }), 5000);
@@ -298,11 +331,12 @@ async function start() {
           upstreamClosed = true;
           target.flush();
           source.flush();
+          asr.flush();
           if (phase === "running") {
             notify("与翻译服务的连接意外断开，请重新开始。", "error");
             setLight("net", "bad");
             void cleanup();
-          } else if (mode === "text" || playerBacklog < 0.05) {
+          } else if (mode === "text" || mode === "asr" || playerBacklog < 0.05) {
             void finish();
           }
         }
@@ -312,6 +346,9 @@ async function start() {
         break;
       case "target":
         if (!msg.final) target.push(msg.itemId, msg.text);
+        break;
+      case "asr":
+        asr.setUtterance(msg.itemId, msg.text, msg.final);
         break;
       case "speech":
         log(msg.event === "started" ? "检测到讲话" : "讲话停顿");
@@ -363,7 +400,7 @@ function stop() {
 
 async function finish() {
   if (phase === "idle") return;
-  log("本次同传结束");
+  log("本次结束");
   await cleanup();
   if (!ui.notice.textContent) notify("已结束。", "info");
 }
@@ -402,3 +439,6 @@ document.addEventListener("visibilitychange", () => {
     log("页面切到后台，部分手机会暂停采音");
   }
 });
+
+// 按上次选的模式初始化界面（放在最后：onModeChange 用到上面声明的 phase）
+onModeChange();

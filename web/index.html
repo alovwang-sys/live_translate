@@ -12,7 +12,7 @@
     <main>
       <header>
         <h1>网页同传助手</h1>
-        <p class="sub">英语 → 中文 · 戴上耳机使用</p>
+        <p class="sub" id="subtitle-line">英语 → 中文 · 戴上耳机使用</p>
       </header>
 
       <section id="token-box" class="card" hidden>
@@ -29,7 +29,19 @@
           <label><input type="radio" name="mode" value="audio" checked /> 语音</label>
           <label><input type="radio" name="mode" value="audio+text" /> 语音＋字幕</label>
           <label><input type="radio" name="mode" value="text" /> 仅字幕</label>
+          <label><input type="radio" name="mode" value="asr" /> 仅转写</label>
         </fieldset>
+        <label id="asr-lang-field" class="field" for="asr-lang" hidden>
+          <span>识别语种（只出原文，不翻译）</span>
+          <select id="asr-lang">
+            <option value="">自动识别</option>
+            <option value="en">英语</option>
+            <option value="zh">中文</option>
+            <option value="yue">粤语</option>
+            <option value="ja">日语</option>
+            <option value="ko">韩语</option>
+          </select>
+        </label>
         <label class="field" for="mic">
           <span>麦克风</span>
           <select id="mic"><option value="">默认麦克风</option></select>
@@ -53,12 +65,13 @@
 
       <section id="subs" class="subs" hidden>
         <div id="sub-target" class="sub-target" aria-live="polite"></div>
+        <div id="sub-asr" class="sub-target" aria-live="polite" hidden></div>
         <div id="sub-source" class="sub-source"></div>
       </section>
 
       <section id="record" class="card record" hidden>
         <div class="record-head">
-          <strong>同传记录</strong>
+          <strong id="record-title">同传记录</strong>
           <span id="record-meta" class="muted small"></span>
         </div>
         <p id="record-stats" class="muted small"></p>

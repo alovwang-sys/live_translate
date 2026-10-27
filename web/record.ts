@@ -1,6 +1,8 @@
 // 同传记录：导出原文 + 译文全文（复制 / 下载 .txt），并在本机保存最近一次记录，刷新页面也能找回。
 
 export interface TranscriptRecord {
+  /** 同传（原文 + 译文）还是纯转写（只有原文）；旧记录没有这个字段，按同传处理 */
+  kind?: "translate" | "asr";
   startedAt: number;
   endedAt?: number;
   source: string;
@@ -52,6 +54,10 @@ export function describe(r: TranscriptRecord) {
 }
 
 export function formatRecord(r: TranscriptRecord, part: "all" | "target" | "source" = "all") {
+  if (r.kind === "asr") {
+    if (part !== "all") return r.source;
+    return ["网页转写记录", `时间：${describe(r)}`, "", r.source || "（无）", ""].join("\n");
+  }
   if (part === "target") return r.target;
   if (part === "source") return r.source;
   return [
@@ -71,7 +77,7 @@ export function formatRecord(r: TranscriptRecord, part: "all" | "target" | "sour
 }
 
 export function fileName(r: TranscriptRecord) {
-  return `同传记录_${dateStr(r.startedAt)}_${timeStr(r.startedAt).replace(":", "")}.txt`;
+  return `${r.kind === "asr" ? "转写记录" : "同传记录"}_${dateStr(r.startedAt)}_${timeStr(r.startedAt).replace(":", "")}.txt`;
 }
 
 export async function copyText(text: string): Promise<boolean> {

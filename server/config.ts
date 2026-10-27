@@ -19,6 +19,9 @@ export const config = {
   port: Number(process.env.PORT ?? 8787),
   host: process.env.HOST ?? "127.0.0.1",
   accessToken: process.env.ACCESS_TOKEN ?? "",
+  /** 纯转写（ASR）：可单独配一个 Key，不填则沿用 DASHSCOPE_API_KEY */
+  asrApiKey: process.env.ASR_API_KEY || required("DASHSCOPE_API_KEY"),
+  asrModel: process.env.ASR_MODEL ?? "qwen3-asr-flash-realtime",
   /** 同时进行的同传会话上限 */
   maxSessions: Number(process.env.MAX_SESSIONS ?? 2),
   /** 单次使用时长上限（分钟），到点自动停止，防止忘关一直计费 */

@@ -76,6 +76,15 @@ flowchart LR
 
 ---
 
+### 2.1 纯转写（「仅转写」模式，2026-10-27 新增）
+
+- **模型**：`qwen3-asr-flash-realtime`，和同传用同一个地址 `…/api-ws/v1/realtime?model=qwen3-asr-flash-realtime`、同一套协议。Key 用 `.env` 里的 `ASR_API_KEY`，不填则沿用 `DASHSCOPE_API_KEY`。
+- **会话配置**：`session.update` 设 `input_audio_format: "pcm"`、`sample_rate: 16000`、`input_audio_transcription.language`（不填自动识别），`turn_detection: { type: "server_vad", threshold: 0.2, silence_duration_ms: 600 }`。
+- **事件**：`conversation.item.input_audio_transcription.text` 是中间结果，当前句预览 = `text + stash`，**整句替换，不是增量**；`...completed.transcript` 是最终结果。一个 item 就是一句话，由服务端 VAD 断句。
+- **价格**：0.00033 元/秒，约 1.2 元/小时（北京地域有 10 小时免费额度）；RPM 1200。
+- **实测**：英文 7 句全对（标点、数字、人名都对）；中文自动识别为 `zh` 也正确；每句话讲完后约 0.5–1 s 出最终结果。建会话比同传慢（4.5–8.5 s），所以后端就绪前的缓存从 5 s 加大到 15 s。
+- **并发**：和同传合计共用 `MAX_SESSIONS=2` 的名额。
+
 ## 3. 技术选型
 
 | 部分 | 选择 | 理由 |
@@ -99,12 +108,14 @@ live_translate/
 ├── server/
 │   ├── index.ts          # fastify：静态文件 + /ws + /healthz
 │   ├── bailian.ts        # 百炼 Realtime 协议客户端（M1 已完成）
+│   ├── asr.ts            # 纯转写：qwen3-asr-flash-realtime 客户端（只出原文）
 │   ├── relay.ts          # 浏览器 WS ⇄ 百炼 WS 中转、事件精简（M2）
 │   ├── session.ts        # 会话生命周期：续会话、重连、尾句收尾（M3）
 │   └── config.ts         # 读取 .env（Node 自带 process.loadEnvFile）
 ├── scripts/
 │   ├── make-sample.sh    # 用 macOS TTS 生成英文测试样本
-│   └── probe.ts          # 命令行链路验证与延迟测量（npm run probe）
+│   ├── probe.ts          # 命令行链路验证与延迟测量（npm run probe）
+│   └── probe-asr.ts      # 纯转写链路验证（npm run probe:asr）
 ├── samples/              # 测试音频（wav 不进 git）、*.anchors.json 逐句对齐关键词
 ├── web/
 │   ├── index.html
@@ -259,6 +270,7 @@ ssh aliyun-server-2 'grep ^ACCESS_TOKEN= /opt/live_translate/.env'   # 查看访
 - [x] 2026-10-26 M0 骨架：fastify 静态页 + `/ws` + `/healthz`，网页点「测试连通」能走通 浏览器 → 后端 → 百炼会话
 - [x] 2026-10-26 M1 打通链路：`npm run probe` 跑通语音和仅字幕两种模式；译音延迟平均约 4.1–4.4 s，字幕约 3.5 s（见 `docs/test-log.md`）
 - [x] 2026-10-26 M2 网页同传：采音/播放 worklet、三种模式、中文字幕按句切分、停止时等尾句、访问口令、2 路并发上限；用测试音频在浏览器里端到端验证通过（真实麦克风待用户实测）
+- [x] 2026-10-27 纯转写模式「仅转写」：qwen3-asr-flash-realtime，可选语种（自动/英/中/粤/日/韩），记录导出为「转写记录」；原有三种同传模式回归通过
 - [x] 2026-10-26 同传记录导出：复制全部 / 复制译文 / 下载 TXT（UTF-8 带 BOM），本机保存最近一次记录
 - [ ] M3 自检与稳定性
 - [x] 2026-10-26 M4 上线 https://magictoolse.com/live/ ：systemd 服务、nginx `/live/` 反代、访问口令；线上 wss 端到端验证通过（手机真机待用户实测）
